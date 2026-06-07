@@ -1,24 +1,17 @@
+require("dotenv").config()
 const express = require("express")
 const axios = require("axios")
+const jwt = require("jsonwebtoken")
 
-const { Client, GatewayIntentBits, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, spoiler } = require("discord.js")
+const { Client, GatewayIntentBits, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js")
 
 const path = require("path")
-const crypto = require("crypto")
-
-
 
 
 const discordToken = process.env.DISCORDTOKEN
-const channelId = process.env.CHANNELID
-const apiBaseUrl = process.env.APIBASEURL
-
-
-
-
-let qualifications = []
-
-
+const channelId    = process.env.CHANNELID
+const apiBaseUrl   = process.env.APIBASEURL
+const jwtSecret    = process.env.JWTSECRET
 
 
 // instanse
@@ -41,7 +34,7 @@ client.on("ready", () => {
     console.log(`${client.user.tag} > ちっす。`)
 })
 
-async function sendMessageToDiscord(author, image, uuid_, text, isSpoiler) {
+async function sendMessageToDiscord(author, image, payload, text, isSpoiler) {
     const channel = await client.channels.fetch(channelId)
     if (!channel) return
     if (author == "null") author = "匿名"
@@ -56,21 +49,11 @@ async function sendMessageToDiscord(author, image, uuid_, text, isSpoiler) {
         .setStyle(ButtonStyle.Danger)
     const row = new ActionRowBuilder().addComponents(quotebtn, newbtn)
 
-    let sendmsg
-    if (text) {
-        sendmsg = `作者：${author}\n${text}`
-    } else {
-        sendmsg = `作者：${author}`
-    }
-
+    const sendmsg  = text ? `作者：${author}\n${text}` : `作者：${author}`
     const filename = isSpoiler ? "SPOILER_image.png" : "image.png"
 
-    console.log(uuid_)
-
-    if (qualifications.find(q => q.uuid == uuid_).base64img != null) {
-
-        const rpmessage = await channel.messages.fetch(qualifications.find(q => q.uuid == uuid_).msgid)
-
+    if (payload.imageUrl) {
+        const rpmessage = await channel.messages.fetch(payload.msgid)
         rpmessage.reply({
             content: sendmsg,
             files: [new AttachmentBuilder(image, { name: filename })],
@@ -86,56 +69,34 @@ async function sendMessageToDiscord(author, image, uuid_, text, isSpoiler) {
 }
 
 client.on("interactionCreate", async (message) => {
-    const a = message.user.globalName
-    const msgid = message.message.id
+    try {
+        const a     = message.user.globalName
+        const msgid = message.message.id
 
-    if (message.customId === "quote") {
-        const attachUrl = message.message.attachments.first().url
-        const uuid = setQualifications(a, msgid, await getb642url(attachUrl))
+        if (message.customId === "quote") {
+            const attachUrl = message.message.attachments.first().url
+            const token = jwt.sign({ author: a, msgid, imageUrl: attachUrl }, jwtSecret, { expiresIn: "1h" })
 
-        const sendmsg = await message.reply({
-            content: `15秒後に消えます\n${apiBaseUrl}?uuid=${uuid}&quote=true`,
-            ephemeral: true,
-        })
+            const sendmsg = await message.reply({
+                content: `15秒後に消えます\n${apiBaseUrl}?token=${token}`,
+                ephemeral: true,
+            })
+            setTimeout(() => sendmsg.delete().catch(console.error), 15000)
 
-        setTimeout(() => {
-            sendmsg.delete().catch(console.error)
-        }, 15000)
-    } else if (message.customId === "newbtn") {
-        const uuid = setQualifications(a, msgid, null)
+        } else if (message.customId === "newbtn") {
+            const token = jwt.sign({ author: a, msgid, imageUrl: null }, jwtSecret, { expiresIn: "1h" })
 
-        const sendmsg = await message.reply({
-            content: `15秒後に消えます\n${apiBaseUrl}?uuid=${uuid}`,
-            ephemeral: true
-        })
-
-        setTimeout(() => {
-            sendmsg.delete().catch(console.error)
-        }, 15000)
+            const sendmsg = await message.reply({
+                content: `15秒後に消えます\n${apiBaseUrl}?token=${token}`,
+                ephemeral: true
+            })
+            setTimeout(() => sendmsg.delete().catch(console.error), 15000)
+        }
+    } catch (e) {
+        console.error("interactionCreate error:", e)
+        await message.reply({ content: "エラーが発生しました", ephemeral: true }).catch(() => {})
     }
 })
-
-async function getb642url(url) {
-    const r = await axios.get(url, {
-        responseType: "arraybuffer"
-    })
-
-    return Buffer.from(r.data, "binary").toString("base64")
-}
-
-function setQualifications(author, msgid, base64img) {
-    const uuid = crypto.randomUUID()
-
-    qualifications.push({
-        uuid: uuid,
-        author: author,
-        msgid: msgid,
-        base64img: base64img,
-        time: new Date
-    })
-
-    return uuid
-}
 
 client.login(discordToken)
 
@@ -146,10 +107,7 @@ client.login(discordToken)
 const allowCrossDomain = function (req, res, next) {
     res.header("Access-Control-Allow-Origin", "*")
     res.header("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE")
-    res.header(
-        "Access-Control-Allow-Headers",
-        "Content-Type, Authorization, access_token"
-    )
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, access_token")
     if ("OPTIONS" === req.method) {
         res.send(200)
     } else {
@@ -159,51 +117,58 @@ const allowCrossDomain = function (req, res, next) {
 app.use(allowCrossDomain)
 
 app.get("/", function (req, res) {
-    res.render(
-        "index",
-        {
-            apiBaseUrl: `<script>window.apiBaseUrl = "${apiBaseUrl}"</script>`,
-        }
-    )
+    res.render("index", {
+        apiBaseUrl: `<script>window.apiBaseUrl = "${apiBaseUrl}"</script>`,
+    })
 })
 
 app.post("/submit", (req, res) => {
-    const image_ = req.body.image
-    const uuid = req.body.uuid
-    const text = req.body.text
-    const isAnonym = req.body.anonym
+    const image_    = req.body.image
+    const token     = req.body.token
+    const text      = req.body.text
+    const isAnonym  = req.body.anonym
     const isSpoiler = req.body.spoiler
 
+    let payload
+    try {
+        payload = jwt.verify(token, jwtSecret)
+    } catch (e) {
+        payload = null
+    }
+
+    let author
+    if (!payload) {
+        author = "session over"
+    } else if (isAnonym) {
+        author = (Math.random() < 0.1) ? payload.author + "[匿名すり抜け発動]" : "匿名"
+    } else {
+        author = payload.author
+    }
+
+    if (!image_) return res.status(400).send("ぅゎ〜〜〜〜〜〜〜〜〜")
+
     const image = Buffer.from(image_.replace(/^data:image\/\w+;base64,/, ''), "base64")
-
-    const matchObj = qualifications.find(q => q.uuid == uuid)
-    let a = ""
-
-
-    if (isAnonym && matchObj) {
-        a = (Math.random() < 0.1) ? matchObj.author + "[匿名すり抜け発動]" : "匿名"
-    } else if (matchObj) {
-        a = matchObj.author
-    } else {
-        a = "session over"
-    }
-
-
-    if (image_) {
-        sendMessageToDiscord(a, image, uuid, text, isSpoiler)
-        res.status(200).send("OK")
-    } else {
-        res.status(400).send("ぅゎ〜〜〜〜〜〜〜〜〜")
-    }
+    sendMessageToDiscord(author, image, payload ?? {}, text, isSpoiler)
+    res.status(200).send("OK")
 })
 
-app.get("/inquiry", (req, res) => {
+app.get("/inquiry", async (req, res) => {
+    let payload
+    try {
+        payload = jwt.verify(req.query.token, jwtSecret)
+    } catch (e) {
+        return res.status(401).json({ error: "invalid token" })
+    }
 
-    qualifications = qualifications.filter(o => {
-        return ((new Date - o.time) / 1000 / 60) <= 60
-    })
+    if (!payload.imageUrl) return res.json({ base64img: null })
 
-    res.send(qualifications.find(q => q.uuid == req.query.uuid))
+    try {
+        const r = await axios.get(payload.imageUrl, { responseType: "arraybuffer" })
+        const b64 = Buffer.from(r.data, "binary").toString("base64")
+        res.json({ base64img: b64 })
+    } catch (e) {
+        res.status(502).json({ error: "failed to fetch image" })
+    }
 })
 
 app.listen(3000, () => {

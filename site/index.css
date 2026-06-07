@@ -1,31 +1,150 @@
+:root {
+    --bg:      #181818;
+    --toolbar: #242424;
+    --border:  #363636;
+    --icon:    #888;
+    --icon-hi: #ccc;
+    --active:  #3560b8;
+    --accent:  #3560b8;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+    overflow: hidden;
+    height: 100%;
+    margin: 0;
+}
+
 body {
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
-    height: 100vh;
-    margin: 0;
-    background-color: #313338;
-    flex-direction: column;
+    gap: 8px;
+    height: 100dvh;
+    background: var(--bg);
+    font-family: system-ui, sans-serif;
 }
 
-html,body {
-    overflow: hidden;
-}
-
+/* Fabric.jsが作るラッパー */
 .canvas-container {
-    border: 2px solid #000000;
-    border-radius: 5px;
-    overflow: hidden;
+    background: #1e1e1e;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.6);
+    touch-action: none;
 }
 
-canvas {
-    display: block;
-    background-color: #313338;
-}
+canvas { display: block; }
 
+/* ツールバー */
 #pen {
     display: flex;
     flex-direction: row;
-    padding-top: 5px;
-    padding-bottom: 5px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2px;
+    padding: 4px 8px;
+    background: var(--toolbar);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    max-width: calc(100vw - 16px);
+}
+
+/* ボタン */
+.tool-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--icon);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.tool-btn:hover {
+    background: rgba(255,255,255,0.07);
+    color: var(--icon-hi);
+}
+
+.tool-btn.active {
+    background: var(--active);
+    color: #fff;
+}
+
+.tool-btn:disabled {
+    opacity: 0.25;
+    pointer-events: none;
+}
+
+/* グループ内の角丸 */
+#pen .btn-group .tool-btn { border-radius: 0; }
+#pen .btn-group .tool-btn:first-child { border-radius: 4px 0 0 4px; }
+#pen .btn-group .tool-btn:last-child  { border-radius: 0 4px 4px 0; }
+
+/* 送信 */
+#popModal {
+    background: var(--active);
+    color: #fff;
+    border-color: transparent;
+}
+#popModal:hover { background: #4a73d4; }
+
+/* 区切り線 */
+.tool-sep {
+    width: 1px;
+    height: 18px;
+    background: var(--border);
+    flex-shrink: 0;
+    margin: 0 3px;
+}
+
+/* カラー */
+#color {
+    width: 28px;
+    height: 28px;
+    padding: 2px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: rgba(255,255,255,0.04);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+#color::-webkit-color-swatch-wrapper { padding: 0; }
+#color::-webkit-color-swatch { border: none; border-radius: 2px; }
+
+/* スライダー */
+#bolder {
+    width: 80px;
+    flex-shrink: 1;
+    min-width: 50px;
+    accent-color: var(--accent);
+}
+
+/* ズーム表示 */
+#zoom-label {
+    font-size: 11px;
+    color: var(--icon);
+    min-width: 36px;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+    letter-spacing: 0.02em;
+}
+#zoom-label:hover { color: var(--icon-hi); }
+
+/* カーソル */
+#pointer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    border-radius: 50%;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    display: none;
 }

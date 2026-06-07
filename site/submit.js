@@ -1,19 +1,14 @@
 document.querySelector("#submit").addEventListener("click", async (e) => {
     const urlParams = new URLSearchParams(window.location.search)
 
-    const sourceCanpas = document.querySelector("#drawingCanvas")
-    const submitCanpas = document.createElement("canvas")
-
-    submitCanpas.width = 500
-    submitCanpas.height = 500
-    submitCanpas.style.display = "none"
-
-    const scaledContext = submitCanpas.getContext("2d")
-    scaledContext.drawImage(sourceCanpas, 0, 0, submitCanpas.width, submitCanpas.height)
-
-    const b64 = submitCanpas.toDataURL()
-    console.log(b64)
-
+    const fc      = window.fabricCanvas
+    const savedVpt = [...fc.viewportTransform]
+    fc.setViewportTransform([1, 0, 0, 1, 0, 0])
+    const b64 = fc.toDataURL({
+        format: "png",
+        multiplier: 500 / fc.width,
+    })
+    fc.setViewportTransform(savedVpt)
     const isAnonym = document.querySelector("#anonym").checked
     const isSpoiler = document.querySelector("#spoiler").checked
 
@@ -27,7 +22,7 @@ document.querySelector("#submit").addEventListener("click", async (e) => {
         },
         body: JSON.stringify({
             image: b64,
-            uuid: decodeURIComponent(urlParams.get("uuid")),
+            token: urlParams.get("token"),
             text: text,
             anonym: isAnonym,
             spoiler: isSpoiler
